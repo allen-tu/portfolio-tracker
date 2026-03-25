@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>投資組合追蹤系統</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --tw-blue: #1565c0; --us-orange: #bf360c; --global-green: #1b5e20;
+      --bond-purple: #4a148c; --cash-gray: #37474f;
+    }
+    body { background: #f0f2f5; font-size: 13px; }
+    .navbar { background: linear-gradient(135deg, #1a237e, #283593) !important; }
+    .navbar-brand { font-weight: 700; font-size: 1.1rem; letter-spacing: 0.5px; }
+    .nav-tab-btn { border-radius: 20px !important; font-size: 13px; padding: 4px 16px; }
+    .nav-tab-btn.active { background: white !important; color: #1a237e !important; border-color: white !important; }
+
+    .summary-bar { background: linear-gradient(135deg, #283593, #1565c0); color: white; padding: 10px 0; }
+    .summary-item { text-align: center; padding: 0 8px; }
+    .summary-label { font-size: 10px; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-value { font-size: 16px; font-weight: 700; line-height: 1.2; }
+    .summary-divider { border-left: 1px solid rgba(255,255,255,0.3); }
+
+    .badge-market { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; display: inline-block; }
+    .badge-tw    { background: #bbdefb; color: #0d47a1; }
+    .badge-us    { background: #ffe0b2; color: #bf360c; }
+    .badge-global{ background: #c8e6c9; color: #1b5e20; }
+    .badge-bond  { background: #e1bee7; color: #4a148c; }
+    .badge-cash  { background: #cfd8dc; color: #263238; }
+
+    .tbl-wrap { max-height: 62vh; overflow-y: auto; border-radius: 8px; }
+    #portfolioTable { font-size: 12.5px; margin-bottom: 0; }
+    #portfolioTable thead th {
+      background: #1a237e; color: white; font-weight: 500;
+      position: sticky; top: 0; z-index: 1; white-space: nowrap;
+      padding: 8px 10px; border: none;
+    }
+    #portfolioTable td { vertical-align: middle; padding: 6px 10px; border-color: #e8eaf6; }
+    .row-tw    { background: #e8f0fe; }
+    .row-us    { background: #fff8f0; }
+    .row-global{ background: #f0f8f0; }
+    .row-bond  { background: #f8f0fe; }
+    .row-cash  { background: #f5f5f5; }
+    .row-tw:hover, .row-us:hover, .row-global:hover,
+    .row-bond:hover, .row-cash:hover { filter: brightness(0.97); }
+
+    .market-subtotal td { font-weight: 600; background: #eceff1 !important; color: #263238; font-size: 12px; }
+
+    .kpi-card { background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); }
+    .kpi-icon { font-size: 28px; opacity: 0.85; }
+    .kpi-value { font-size: 20px; font-weight: 700; color: #1a237e; }
+    .kpi-label { font-size: 11px; color: #78909c; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-sub { font-size: 12px; color: #546e7a; }
+
+    .chart-card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); height: 100%; }
+    .chart-card h6 { font-size: 13px; font-weight: 600; color: #37474f; }
+
+    .filter-btn { border-radius: 20px !important; font-size: 12px; padding: 3px 12px; }
+    .filter-btn.active { background: #1a237e !important; color: white !important; border-color: #1a237e !important; }
+
+    .alloc-bar { height: 22px; border-radius: 4px; background: #e8eaf6; overflow: hidden; display: flex; }
+    .alloc-segment { height: 100%; transition: width 0.4s; display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; font-weight: 600; overflow: hidden; white-space: nowrap; }
+
+    .price-spin { animation: spin 1.2s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .pct-bar { height: 5px; border-radius: 3px; background: #e0e0e0; margin-top: 3px; }
+    .pct-fill { height: 100%; border-radius: 3px; }
+
+    .action-btn { padding: 2px 7px; font-size: 11px; }
+
+    .modal-header { background: #1a237e; color: white; }
+    .modal-header .btn-close { filter: invert(1); }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-auto { background: #43a047; }
+    .dot-moneydj { background: #1e88e5; }
+    .dot-manual { background: #fb8c00; }
+
+    @media (max-width: 768px) {
+      .summary-value { font-size: 13px; }
+      .tbl-wrap { max-height: 55vh; }
+    }
+
+    .drag-handle { width: 24px; text-align: center; color: #b0bec5; cursor: grab; user-select: none; padding: 0 4px !important; }
+    .drag-handle:active { cursor: grabbing; }
+    .drag-handle.drag-disabled { color: transparent; cursor: default; }
+    tr.dragging { opacity: 0.35; }
+    tr.drag-over-top td { border-top: 2px solid #1565c0 !important; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="navbar navbar-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">
+      <i class="bi bi-graph-up-arrow me-2"></i>投資組合追蹤系統
+    </span>
+    <div class="d-flex gap-2 align-items-center">
+      <button class="btn btn-sm btn-outline-light nav-tab-btn active" id="btnTabPortfolio" onclick="showTab('portfolio')">
+        <i class="bi bi-table me-1"></i>持倉管理
+      </button>
+      <button class="btn btn-sm btn-outline-light nav-tab-btn" id="btnTabDashboard" onclick="showTab('dashboard')">
+        <i class="bi bi-bar-chart-line me-1"></i>分析儀表板
+      </button>
+      <button class="btn btn-sm btn-outline-warning ms-2 nav-tab-btn" onclick="showRateModal()">
+        <i class="bi bi-currency-exchange me-1"></i>匯率設定
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- SUMMARY BAR -->
+<div class="summary-bar">
+  <div class="container-fluid">
+    <div class="d-flex flex-wrap justify-content-center align-items-center gap-1">
+      <div class="summary-item">
+        <div class="summary-label">總資產 (台幣)</div>
+        <div class="summary-value text-warning" id="sTotalTWD">—</div>
+      </div>
+      <div class="summary-divider d-none d-md-block" style="height:36px;"></div>
+      <div class="summary-item">
+        <div class="summary-label">美元資產</div>
+        <div class="summary-value" id="sTotalUSD">—</div>
+      </div>
+      <div class="summary-divider d-none d-md-block" style="height:36px;"></div>
+      <div class="summary-item">
+        <div class="summary-label">USD/TWD 匯率</div>
+        <div class="summary-value" id="sRate" style="cursor:pointer;" onclick="showRateModal()">—</div>
+      </div>
+      <div class="summary-divider d-none d-md-block" style="height:36px;"></div>
+      <div class="summary-item">
+        <div class="summary-label">持倉數</div>
+        <div class="summary-value" id="sCount">—</div>
+      </div>
+      <div class="summary-divider d-none d-md-block" style="height:36px;"></div>
+      <div class="summary-item">
+        <div class="summary-label">最後更新</div>
+        <div class="summary-value" id="sLastUpdate" style="font-size:12px;">—</div>
+      </div>
+      <div class="summary-item ms-3">
+        <button class="btn btn-sm btn-warning fw-bold" id="btnRefresh" onclick="refreshPrices()">
+          <i class="bi bi-arrow-clockwise me-1"></i>更新報價
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== PORTFOLIO TAB ======== -->
+<div id="tabPortfolio" class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+    <div class="d-flex gap-1 flex-wrap align-items-center">
+      <span class="text-muted me-1" style="font-size:12px;">篩選：</span>
+      <button class="btn btn-sm btn-outline-secondary filter-btn active" id="fAll" onclick="filterMarket('all', this)">全部</button>
+      <button class="btn btn-sm btn-outline-secondary filter-btn" id="f台股" onclick="filterMarket('台股', this)"><span class="badge-market badge-tw">台股</span></button>
+      <button class="btn btn-sm btn-outline-secondary filter-btn" id="f美股" onclick="filterMarket('美股', this)"><span class="badge-market badge-us">美股</span></button>
+      <button class="btn btn-sm btn-outline-secondary filter-btn" id="f全球" onclick="filterMarket('全球', this)"><span class="badge-market badge-global">全球</span></button>
+      <button class="btn btn-sm btn-outline-secondary filter-btn" id="f債券" onclick="filterMarket('債券', this)"><span class="badge-market badge-bond">債券</span></button>
+      <button class="btn btn-sm btn-outline-secondary filter-btn" id="f現金" onclick="filterMarket('現金', this)"><span class="badge-market badge-cash">現金</span></button>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-success" onclick="openAddModal()"><i class="bi bi-plus-lg me-1"></i>新增持倉</button>
+      <button class="btn btn-sm btn-outline-primary" onclick="exportJSON()"><i class="bi bi-download me-1"></i>匯出</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('importFile').click()"><i class="bi bi-upload me-1"></i>匯入</button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="tbl-wrap">
+      <table class="table table-hover" id="portfolioTable">
+        <thead>
+          <tr>
+            <th style="width:28px;padding:4px;" title="拖曳調整順序"></th>
+            <th>市場</th><th>代號</th><th>名稱</th>
+            <th class="text-end">股數/單位</th>
+            <th>幣別</th>
+            <th class="text-end">現值</th>
+            <th class="text-end">市值(台幣)</th>
+            <th class="text-end">總佔比</th>
+            <th class="text-end">市場佔比</th>
+            <th>更新時間</th>
+            <th style="width:88px;text-align:center;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Market summary cards -->
+  <div class="row g-3" id="marketCards"></div>
+</div>
+
+<!-- ======== DASHBOARD TAB ======== -->
+<div id="tabDashboard" class="container-fluid mt-3" style="display:none;">
+  <div class="row g-3 mb-3" id="kpiRow"></div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-lg-5 col-md-6">
+      <div class="chart-card">
+        <h6><i class="bi bi-pie-chart-fill me-2 text-primary"></i>市場配置</h6>
+        <canvas id="chartMarket" height="240"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+      <div class="chart-card">
+        <h6><i class="bi bi-circle-half me-2 text-success"></i>股債現金</h6>
+        <canvas id="chartAsset" height="240"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4 col-md-12">
+      <div class="chart-card">
+        <h6><i class="bi bi-currency-dollar me-2 text-warning"></i>幣別配置</h6>
+        <canvas id="chartCurrency" height="240"></canvas>
+        <div id="allocBar" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="chart-card">
+        <h6><i class="bi bi-bar-chart-horizontal-fill me-2 text-danger"></i>各持倉市值 (台幣)</h6>
+        <canvas id="chartHoldings" height="110"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <h6><i class="bi bi-layers-fill me-2 text-info"></i>市場分類佔比</h6>
+        <div id="marketBreakdown"></div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <h6><i class="bi bi-list-ul me-2 text-secondary"></i>前10大持倉</h6>
+        <div id="top10Table"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== MODALS ======== -->
+<!-- Add/Edit Holding Modal -->
+<div class="modal fade" id="holdingModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle"><i class="bi bi-plus-circle me-2"></i>新增持倉</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">市場 <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm" id="iMarket">
+              <option>台股</option><option>美股</option><option>全球</option>
+              <option>債券</option><option>現金</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">顯示代號 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-sm" id="iSymbol" placeholder="如: 0050, VTI">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Yahoo 代號 <small class="text-muted">(選填)</small></label>
+            <input type="text" class="form-control form-control-sm" id="iYahoo" placeholder="如: 0050.TW, VTI">
+            <div class="form-text">台股加 .TW；留空=手動更新</div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">幣別 <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm" id="iCurrency">
+              <option value="TWD">台幣 (TWD)</option>
+              <option value="USD">美元 (USD)</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">持倉名稱 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-sm" id="iName" placeholder="如: 元大台灣50">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">持有股數/單位 <span class="text-danger">*</span></label>
+            <input type="number" class="form-control form-control-sm" id="iShares" placeholder="0" step="0.0001" min="0">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">現值 (每股) <span class="text-danger">*</span></label>
+            <input type="number" class="form-control form-control-sm" id="iPrice" placeholder="0.00" step="0.01" min="0">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">
+              <span class="status-dot dot-moneydj me-1"></span>MoneyDJ 基金網址 <small class="text-muted">(選填，Yahoo 無法取得時使用)</small>
+            </label>
+            <input type="text" class="form-control form-control-sm" id="iMoneyDJ" placeholder="https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=xxxxx">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">備註</label>
+            <input type="text" class="form-control form-control-sm" id="iNote" placeholder="如: 第一金帳戶">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">目標配置 (%)</label>
+            <input type="number" class="form-control form-control-sm" id="iTarget" placeholder="0.0" step="0.1" min="0" max="100">
+          </div>
+        </div>
+        <div id="pricePreview" class="alert alert-info mt-3 py-2" style="display:none;font-size:12px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveHolding()">
+          <i class="bi bi-check2 me-1"></i>儲存
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Exchange Rate Modal -->
+<div class="modal fade" id="rateModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-currency-exchange me-2"></i>設定匯率</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">USD / TWD 匯率</label>
+        <input type="number" class="form-control" id="iRate" step="0.01" value="31.98">
+        <div class="form-text mt-1">目前匯率：<span id="currentRateDisplay">—</span></div>
+        <button class="btn btn-sm btn-outline-primary mt-2 w-100" onclick="fetchExchangeRate()">
+          <i class="bi bi-cloud-download me-1"></i>自動抓取最新匯率
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveRate()">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ============================================================
+// DEFAULT DATA (from spreadsheet)
+// ============================================================
+const DEFAULT_HOLDINGS = [
+  {id:1,  market:'台股', symbol:'0050',    yahoo:'0050.TW',    name:'元大台灣50',            shares:7542,    currency:'TWD', price:74.4,    priceDate:'2026-03-24', note:''},
+  {id:2,  market:'台股', symbol:'006208',  yahoo:'006208.TW',  name:'富邦台50',              shares:7095,    currency:'TWD', price:172.75,  priceDate:'2026-03-24', note:''},
+  {id:3,  market:'台股', symbol:'00675L',  yahoo:'00675L.TW',  name:'富邦加權正2',           shares:22000,   currency:'TWD', price:175.35,  priceDate:'2026-03-24', note:''},
+  {id:4,  market:'台股', symbol:'00713',   yahoo:'00713.TW',   name:'元大高息低波',          shares:33000,   currency:'TWD', price:51.35,   priceDate:'2026-03-24', note:''},
+  {id:5,  market:'台股', symbol:'00878',   yahoo:'00878.TW',   name:'國泰永續高股息',        shares:26000,   currency:'TWD', price:22.08,   priceDate:'2026-03-24', note:''},
+  {id:6,  market:'台股', symbol:'TSM',     yahoo:'TSM',        name:'TSM',                   shares:7,       currency:'USD', price:338.45,  priceDate:'2026-03-24', note:''},
+  {id:7,  market:'台股', symbol:'野村優質', yahoo:null,         name:'野村優質基金',          shares:4261.7,  currency:'TWD', price:303.16,  priceDate:'2026-03-24', note:'', moneydj:'https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=acic01'},
+  {id:8,  market:'美股', symbol:'VTI',     yahoo:'VTI',        name:'VTI',                   shares:33,      currency:'USD', price:324.19,  priceDate:'2026-03-24', note:''},
+  {id:9,  market:'美股', symbol:'BRK.B',   yahoo:'BRK-B',      name:'BRK.B',                 shares:4,       currency:'USD', price:479.98,  priceDate:'2026-03-24', note:''},
+  {id:10, market:'美股', symbol:'NVDA',    yahoo:'NVDA',       name:'NVDA',                  shares:4,       currency:'USD', price:175.68,  priceDate:'2026-03-24', note:''},
+  {id:11, market:'美股', symbol:'QLD',     yahoo:'QLD',        name:'QLD(FirstTrade)',       shares:104,     currency:'USD', price:63.58,   priceDate:'2026-03-24', note:''},
+  {id:12, market:'美股', symbol:'QLD',     yahoo:'QLD',        name:'QLD(IB)',               shares:316,     currency:'USD', price:63.58,   priceDate:'2026-03-24', note:''},
+  {id:13, market:'美股', symbol:'摩根科技', yahoo:null,         name:'摩根美國科技基金',      shares:436.36,  currency:'USD', price:62.40,   priceDate:'2026-03-24', note:'', moneydj:'https://www.moneydj.com/funddj/ya/yp010001.djhtm?a=jfzf3'},
+  {id:14, market:'美股', symbol:'00662',   yahoo:'00662.TW',   name:'富邦NASDAQ',            shares:12000,   currency:'TWD', price:98.60,   priceDate:'2026-03-24', note:''},
+  {id:15, market:'全球', symbol:'00893',   yahoo:'00893.TW',   name:'國泰智能電動車',        shares:50000,   currency:'TWD', price:32.89,   priceDate:'2026-03-24', note:''},
+  {id:16, market:'全球', symbol:'VT',      yahoo:'VT',         name:'VT(FirstTrade)',        shares:100,     currency:'USD', price:138.6,   priceDate:'2026-03-24', note:''},
+  {id:17, market:'全球', symbol:'VT',      yahoo:'VT',         name:'VT(元大台幣帳戶)-單筆', shares:453,     currency:'USD', price:138.6,   priceDate:'2026-03-24', note:''},
+  {id:18, market:'全球', symbol:'VT',      yahoo:'VT',         name:'VT(元大台幣帳戶)-定期', shares:51.91,   currency:'USD', price:138.6,   priceDate:'2026-03-24', note:''},
+  {id:19, market:'全球', symbol:'VXUS',    yahoo:'VXUS',       name:'VXUS',                  shares:40,      currency:'USD', price:76.58,   priceDate:'2026-03-24', note:''},
+  {id:20, market:'全球', symbol:'VWRA',    yahoo:'VWRA.L',     name:'VWRA(IB)',              shares:183,     currency:'USD', price:165.87,  priceDate:'2026-03-24', note:''},
+  {id:21, market:'全球', symbol:'野村全球', yahoo:null,         name:'野村全球品牌基金',      shares:16336.8, currency:'TWD', price:52.13,   priceDate:'2026-03-24', note:'', moneydj:'https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=acic09'},
+  {id:22, market:'全球', symbol:'中信貝萊德',yahoo:null,        name:'貝萊德世界科技基金',    shares:62.93,   currency:'USD', price:109.81,  priceDate:'2026-03-24', note:''},
+  {id:23, market:'全球', symbol:'國泰MIT',  yahoo:null,         name:'國泰人壽MIT多元收益',   shares:1451.15, currency:'USD', price:8.55,    priceDate:'2026-03-24', note:''},
+  {id:24, market:'債券', symbol:'00933B',   yahoo:'00933B.TW',  name:'國泰10Y+金融債',       shares:35000,   currency:'TWD', price:15.99,   priceDate:'2026-03-24', note:''},
+  {id:25, market:'債券', symbol:'00937B',   yahoo:'00937B.TW',  name:'群益ESG頻等債20+',     shares:40000,   currency:'TWD', price:14.77,   priceDate:'2026-03-24', note:''},
+  {id:26, market:'債券', symbol:'00948B',   yahoo:'00948B.TW',  name:'中信優息投資級債',     shares:60000,   currency:'TWD', price:9.43,    priceDate:'2026-03-24', note:''},
+  {id:27, market:'債券', symbol:'凱基聯博',  yahoo:null,         name:'聯博全球非銀等債TA',   shares:443.13,  currency:'TWD', price:7.44,    priceDate:'2026-03-24', note:''},
+  {id:28, market:'債券', symbol:'彭銀聯博',  yahoo:null,         name:'聯博全球非銀等債AT',   shares:878.16,  currency:'USD', price:3.06,    priceDate:'2026-03-24', note:''},
+  {id:29, market:'現金', symbol:'台幣',     yahoo:null,         name:'台幣現金',              shares:1,       currency:'TWD', price:1522000, priceDate:'2026-01-13', note:''},
+  {id:30, market:'現金', symbol:'美金',     yahoo:null,         name:'美金現金',              shares:1,       currency:'USD', price:2940,    priceDate:'2026-01-13', note:''},
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  holdings: [],
+  exchangeRate: 31.98,
+  nextId: 31,
+  currentFilter: 'all',
+  editingId: null,
+};
+let charts = {};
+
+const MARKET_COLORS = {
+  '台股': '#1565c0', '美股': '#bf360c', '全球': '#1b5e20', '債券': '#4a148c', '現金': '#546e7a'
+};
+const MARKET_LIGHT = {
+  '台股': '#bbdefb', '美股': '#ffe0b2', '全球': '#c8e6c9', '債券': '#e1bee7', '現金': '#cfd8dc'
+};
+const ASSET_GROUPS = { '股票': ['台股','美股','全球'], '債券': ['債券'], '現金': ['現金'] };
+
+// ============================================================
+// INIT / PERSISTENCE
+// ============================================================
+function loadState() {
+  try {
+    const saved = localStorage.getItem('portfolioState');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      state.holdings = parsed.holdings || DEFAULT_HOLDINGS;
+      state.exchangeRate = parsed.exchangeRate || 31.98;
+      state.nextId = parsed.nextId || (Math.max(...state.holdings.map(h => h.id)) + 1);
+    } else {
+      state.holdings = JSON.parse(JSON.stringify(DEFAULT_HOLDINGS));
+    }
+  } catch(e) {
+    state.holdings = JSON.parse(JSON.stringify(DEFAULT_HOLDINGS));
+  }
+  // Migrate: assign order within each market group if missing
+  const counters = {};
+  ['台股','美股','全球','債券','現金'].forEach(m => counters[m] = 0);
+  state.holdings.forEach(h => {
+    if (h.order == null) { h.order = counters[h.market] ?? 0; counters[h.market]++; }
+  });
+}
+
+function saveState() {
+  localStorage.setItem('portfolioState', JSON.stringify({
+    holdings: state.holdings,
+    exchangeRate: state.exchangeRate,
+    nextId: state.nextId,
+  }));
+}
+
+// ============================================================
+// CALCULATIONS
+// ============================================================
+function valueTWD(h) {
+  const v = h.shares * h.price;
+  return h.currency === 'USD' ? v * state.exchangeRate : v;
+}
+
+function calcMetrics() {
+  const total = state.holdings.reduce((s, h) => s + valueTWD(h), 0);
+  const totalUSD = state.holdings
+    .filter(h => h.currency === 'USD')
+    .reduce((s, h) => s + h.shares * h.price, 0);
+
+  const byMarket = {};
+  ['台股','美股','全球','債券','現金'].forEach(m => byMarket[m] = 0);
+  state.holdings.forEach(h => { byMarket[h.market] = (byMarket[h.market] || 0) + valueTWD(h); });
+
+  const byAsset = { '股票': 0, '債券': 0, '現金': 0 };
+  Object.entries(ASSET_GROUPS).forEach(([g, markets]) => {
+    markets.forEach(m => byAsset[g] += (byMarket[m] || 0));
+  });
+
+  const twdTotal = state.holdings.filter(h => h.currency === 'TWD').reduce((s, h) => s + h.shares * h.price, 0);
+  const usdTWD = state.holdings.filter(h => h.currency === 'USD').reduce((s, h) => s + valueTWD(h), 0);
+
+  return { total, totalUSD, byMarket, byAsset, twdTotal, usdTWD };
+}
+
+// ============================================================
+// SUMMARY BAR
+// ============================================================
+function updateSummary() {
+  const m = calcMetrics();
+  document.getElementById('sTotalTWD').textContent = fmtTWD(m.total);
+  document.getElementById('sTotalUSD').textContent = 'USD ' + fmtNum(m.totalUSD, 0);
+  document.getElementById('sRate').textContent = state.exchangeRate.toFixed(2);
+  document.getElementById('sCount').textContent = state.holdings.length + ' 筆';
+  document.getElementById('sLastUpdate').textContent = new Date().toLocaleString('zh-TW', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+// ============================================================
+// TABLE RENDERING
+// ============================================================
+function renderTable() {
+  const m = calcMetrics();
+  const filter = state.currentFilter;
+  const markets = ['台股','美股','全球','債券','現金'];
+  const tbody = document.getElementById('tBody');
+  let html = '';
+
+  const filtered = filter === 'all' ? markets : [filter];
+
+  filtered.forEach(market => {
+    const rows = state.holdings
+      .filter(h => h.market === market)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    if (!rows.length) return;
+    const mTotal = m.byMarket[market] || 0;
+
+    rows.forEach(h => {
+      const vTWD = valueTWD(h);
+      const pct = m.total > 0 ? vTWD / m.total * 100 : 0;
+      const mPct = mTotal > 0 ? vTWD / mTotal * 100 : 0;
+      const cls = { '台股':'row-tw','美股':'row-us','全球':'row-global','債券':'row-bond','現金':'row-cash' }[market] || '';
+      const badge = { '台股':'badge-tw','美股':'badge-us','全球':'badge-global','債券':'badge-bond','現金':'badge-cash' }[market] || '';
+      const srcDot = h.yahoo ? '<span class="status-dot dot-auto ms-1" title="Yahoo自動更新"></span>'
+                   : h.moneydj ? '<span class="status-dot dot-moneydj ms-1" title="MoneyDJ自動更新"></span>'
+                   : '<span class="status-dot dot-manual ms-1" title="手動更新"></span>';
+
+      html += `<tr class="${cls}" data-id="${h.id}" draggable="true">
+        <td class="drag-handle" title="拖曳調整順序"><i class="bi bi-grip-vertical"></i></td>
+        <td><span class="badge-market ${badge}">${market}</span></td>
+        <td class="fw-semibold">${esc(h.symbol)} ${srcDot}</td>
+        <td>${esc(h.name)}${h.note ? '<small class="text-muted ms-1">('+esc(h.note)+')</small>' : ''}</td>
+        <td class="text-end">${fmtNum(h.shares, h.shares < 100 ? 2 : 0)}</td>
+        <td><span class="badge ${h.currency==='USD'?'bg-warning text-dark':'bg-primary'}" style="font-size:10px;">${h.currency==='USD'?'USD':'TWD'}</span></td>
+        <td class="text-end fw-semibold">${h.currency==='USD'?'$':''}${fmtNum(h.price, h.price < 10 ? 3 : 2)}</td>
+        <td class="text-end">
+          ${fmtTWD(vTWD)}
+          <div class="pct-bar"><div class="pct-fill" style="width:${Math.min(pct*5,100)}%;background:${MARKET_COLORS[market]};"></div></div>
+        </td>
+        <td class="text-end text-muted">${pct.toFixed(2)}%</td>
+        <td class="text-end text-muted">${mPct.toFixed(1)}%</td>
+        <td class="text-muted" style="font-size:11px;">${h.priceDate || '—'}</td>
+        <td class="text-nowrap" style="white-space:nowrap;">
+          <div class="d-flex gap-1 align-items-center justify-content-center">
+            <button class="btn btn-outline-secondary action-btn" onclick="openEditModal(${h.id})" title="編輯"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-outline-danger action-btn" onclick="deleteHolding(${h.id})" title="刪除"><i class="bi bi-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    });
+
+    // Market subtotal row
+    const mPct = m.total > 0 ? mTotal / m.total * 100 : 0;
+    html += `<tr class="market-subtotal">
+      <td colspan="7" class="text-end">${market} 小計</td>
+      <td class="text-end">${fmtTWD(mTotal)}</td>
+      <td class="text-end">${mPct.toFixed(2)}%</td>
+      <td colspan="3"></td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = html || '<tr><td colspan="12" class="text-center py-4 text-muted">暫無持倉資料</td></tr>';
+  renderMarketCards(m);
+}
+
+function renderMarketCards(m) {
+  const markets = ['台股','美股','全球','債券','現金'];
+  let html = '';
+  markets.forEach(market => {
+    const v = m.byMarket[market] || 0;
+    const pct = m.total > 0 ? v / m.total * 100 : 0;
+    const count = state.holdings.filter(h => h.market === market).length;
+    const badge = { '台股':'badge-tw','美股':'badge-us','全球':'badge-global','債券':'badge-bond','現金':'badge-cash' }[market];
+    html += `<div class="col-6 col-md-4 col-xl-2">
+      <div class="kpi-card">
+        <div class="d-flex justify-content-between align-items-start">
+          <span class="badge-market ${badge} mb-1">${market}</span>
+          <small class="text-muted">${count} 筆</small>
+        </div>
+        <div class="kpi-value" style="font-size:16px;">${fmtTWD(v)}</div>
+        <div class="kpi-sub">${pct.toFixed(2)}% 總資產</div>
+        <div class="pct-bar mt-1"><div class="pct-fill" style="width:${pct}%;background:${MARKET_COLORS[market]};"></div></div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('marketCards').innerHTML = html;
+}
+
+// ============================================================
+// DASHBOARD RENDERING
+// ============================================================
+function renderDashboard() {
+  const m = calcMetrics();
+  renderKPI(m);
+  renderChartMarket(m);
+  renderChartAsset(m);
+  renderChartCurrency(m);
+  renderChartHoldings(m);
+  renderMarketBreakdown(m);
+  renderTop10(m);
+}
+
+function renderKPI(m) {
+  const stock = m.byAsset['股票'];
+  const bond = m.byAsset['債券'];
+  const cash = m.byAsset['現金'];
+  const stockPct = m.total > 0 ? stock / m.total * 100 : 0;
+  const bondPct = m.total > 0 ? bond / m.total * 100 : 0;
+  const cashPct = m.total > 0 ? cash / m.total * 100 : 0;
+
+  document.getElementById('kpiRow').innerHTML = `
+    <div class="col-6 col-md-3"><div class="kpi-card d-flex align-items-center gap-3">
+      <div class="kpi-icon text-primary"><i class="bi bi-wallet2"></i></div>
+      <div><div class="kpi-label">總資產 (台幣)</div><div class="kpi-value">${fmtTWD(m.total)}</div><div class="kpi-sub">USD ${fmtNum(m.totalUSD,0)}</div></div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="kpi-card d-flex align-items-center gap-3">
+      <div class="kpi-icon text-success"><i class="bi bi-graph-up-arrow"></i></div>
+      <div><div class="kpi-label">股票資產</div><div class="kpi-value" style="color:#1b5e20;">${fmtTWD(stock)}</div><div class="kpi-sub">${stockPct.toFixed(1)}% 佔比</div></div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="kpi-card d-flex align-items-center gap-3">
+      <div class="kpi-icon text-warning"><i class="bi bi-shield-check"></i></div>
+      <div><div class="kpi-label">債券資產</div><div class="kpi-value" style="color:#4a148c;">${fmtTWD(bond)}</div><div class="kpi-sub">${bondPct.toFixed(1)}% 佔比</div></div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="kpi-card d-flex align-items-center gap-3">
+      <div class="kpi-icon text-secondary"><i class="bi bi-cash-stack"></i></div>
+      <div><div class="kpi-label">現金部位</div><div class="kpi-value" style="color:#546e7a;">${fmtTWD(cash)}</div><div class="kpi-sub">${cashPct.toFixed(1)}% 佔比</div></div>
+    </div></div>`;
+}
+
+function renderChartMarket(m) {
+  const markets = ['台股','美股','全球','債券','現金'];
+  const values = markets.map(k => m.byMarket[k] || 0);
+  mkChart('chartMarket', {
+    type: 'doughnut',
+    data: {
+      labels: markets.map((k,i) => `${k} (${(values[i]/m.total*100).toFixed(1)}%)`),
+      datasets: [{ data: values, backgroundColor: markets.map(k => MARKET_COLORS[k]), borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+function renderChartAsset(m) {
+  const assets = ['股票','債券','現金'];
+  const colors = ['#1565c0','#4a148c','#546e7a'];
+  const values = assets.map(k => m.byAsset[k]);
+  mkChart('chartAsset', {
+    type: 'doughnut',
+    data: {
+      labels: assets.map((k,i) => `${k} (${(values[i]/m.total*100).toFixed(1)}%)`),
+      datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+function renderChartCurrency(m) {
+  const twdPct = m.total > 0 ? m.twdTotal / m.total * 100 : 0;
+  const usdPct = m.total > 0 ? m.usdTWD / m.total * 100 : 0;
+  mkChart('chartCurrency', {
+    type: 'pie',
+    data: {
+      labels: [`台幣 (${twdPct.toFixed(1)}%)`, `美元 (${usdPct.toFixed(1)}%)`],
+      datasets: [{ data: [m.twdTotal, m.usdTWD], backgroundColor: ['#1565c0','#e65100'], borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+
+  document.getElementById('allocBar').innerHTML = `
+    <div style="font-size:11px;color:#546e7a;margin-bottom:4px;">台幣 vs 美元資產分佈</div>
+    <div class="alloc-bar">
+      <div class="alloc-segment" style="width:${twdPct}%;background:#1565c0;">${twdPct>8?twdPct.toFixed(0)+'%':''}</div>
+      <div class="alloc-segment" style="width:${usdPct}%;background:#e65100;">${usdPct>8?usdPct.toFixed(0)+'%':''}</div>
+    </div>
+    <div class="d-flex justify-content-between mt-1" style="font-size:11px;">
+      <span style="color:#1565c0;">● 台幣 ${fmtTWD(m.twdTotal)}</span>
+      <span style="color:#e65100;">● 美元 ${fmtTWD(m.usdTWD)}</span>
+    </div>`;
+}
+
+function renderChartHoldings(m) {
+  const sorted = [...state.holdings]
+    .map(h => ({ name: h.name.length > 10 ? h.name.slice(0,10)+'…' : h.name, value: valueTWD(h), market: h.market }))
+    .sort((a, b) => b.value - a.value);
+
+  mkChart('chartHoldings', {
+    type: 'bar',
+    data: {
+      labels: sorted.map(h => h.name),
+      datasets: [{
+        data: sorted.map(h => h.value),
+        backgroundColor: sorted.map(h => MARKET_COLORS[h.market] + 'cc'),
+        borderColor: sorted.map(h => MARKET_COLORS[h.market]),
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true, indexAxis: 'x',
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + fmtTWD(ctx.raw) } }
+      },
+      scales: {
+        y: { ticks: { font: { size: 10 }, callback: v => fmtTWD(v) } },
+        x: { ticks: { font: { size: 10 }, maxRotation: 45 } }
+      }
+    }
+  });
+}
+
+function renderMarketBreakdown(m) {
+  const markets = ['台股','美股','全球','債券','現金'];
+  let html = '';
+  markets.forEach(market => {
+    const v = m.byMarket[market] || 0;
+    const pct = m.total > 0 ? v / m.total * 100 : 0;
+    const badge = { '台股':'badge-tw','美股':'badge-us','全球':'badge-global','債券':'badge-bond','現金':'badge-cash' }[market];
+    html += `<div class="d-flex align-items-center mb-2 gap-2">
+      <div style="width:60px;"><span class="badge-market ${badge}">${market}</span></div>
+      <div style="flex:1;">
+        <div class="alloc-bar" style="height:18px;">
+          <div class="alloc-segment" style="width:${pct}%;background:${MARKET_COLORS[market]};">${pct>5?pct.toFixed(1)+'%':''}</div>
+        </div>
+      </div>
+      <div style="width:120px;text-align:right;font-size:12px;font-weight:600;">${fmtTWD(v)} <span class="text-muted">(${pct.toFixed(1)}%)</span></div>
+    </div>`;
+  });
+  document.getElementById('marketBreakdown').innerHTML = html;
+}
+
+function renderTop10(m) {
+  const top = [...state.holdings]
+    .map(h => ({ ...h, vTWD: valueTWD(h) }))
+    .sort((a, b) => b.vTWD - a.vTWD)
+    .slice(0, 10);
+
+  let html = '<table class="table table-sm mb-0" style="font-size:12px;"><thead><tr><th>#</th><th>名稱</th><th class="text-end">市值</th><th class="text-end">佔比</th></tr></thead><tbody>';
+  top.forEach((h, i) => {
+    const pct = m.total > 0 ? h.vTWD / m.total * 100 : 0;
+    const badge = { '台股':'badge-tw','美股':'badge-us','全球':'badge-global','債券':'badge-bond','現金':'badge-cash' }[h.market];
+    html += `<tr>
+      <td class="text-muted">${i+1}</td>
+      <td><span class="badge-market ${badge} me-1">${h.market}</span>${esc(h.name)}</td>
+      <td class="text-end fw-semibold">${fmtTWD(h.vTWD)}</td>
+      <td class="text-end text-muted">${pct.toFixed(2)}%</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('top10Table').innerHTML = html;
+}
+
+// ============================================================
+// PRICE FETCHING
+// ============================================================
+async function refreshPrices() {
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise price-spin me-1"></i>更新中...';
+
+  const today = new Date().toLocaleDateString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
+  let updated = 0;
+
+  // --- Yahoo Finance batch fetch ---
+  const symbols = [...new Set(state.holdings.filter(h => h.yahoo).map(h => h.yahoo))];
+  if (symbols.length) {
+    const priceMap = await batchFetchPrices(symbols);
+    state.holdings.forEach(h => {
+      if (h.yahoo && !h.yahoo.endsWith('.L') && priceMap[h.yahoo] != null) {
+        h.price = priceMap[h.yahoo];
+        h.priceDate = today;
+        updated++;
+      }
+    });
+  }
+
+  // --- MoneyDJ fetch for funds not on Yahoo ---
+  const mdHoldings = state.holdings.filter(h => !h.yahoo && h.moneydj);
+  if (mdHoldings.length) {
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise price-spin me-1"></i>抓取基金報價...';
+    const mdResults = await Promise.allSettled(
+      mdHoldings.map(h => fetchMoneyDJPrice(h.moneydj).then(p => ({ h, p })))
+    );
+    mdResults.forEach(r => {
+      if (r.status === 'fulfilled' && r.value.p != null) {
+        r.value.h.price = r.value.p;
+        r.value.h.priceDate = today;
+        updated++;
+      }
+    });
+  }
+
+  saveState();
+  renderAll();
+
+  if (updated > 0) {
+    showToast(`成功更新 ${updated} 筆報價`, 'success');
+  } else {
+    showToast('無法取得即時報價，請檢查網路連線', 'danger');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>更新報價';
+}
+
+async function batchFetchPrices(symbols) {
+  const map = {};
+  // Try Yahoo Finance v7 batch API
+  const url = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}&fields=regularMarketPrice`;
+
+  async function tryFetch(fetchUrl) {
+    const r = await fetch(fetchUrl, { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  let data = null;
+  // Try direct
+  try { data = await tryFetch(url); } catch(e) {}
+
+  // Try CORS proxy 1
+  if (!data) {
+    try {
+      data = await tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+    } catch(e) {}
+  }
+
+  // Try CORS proxy 2 - corsproxy.io
+  if (!data) {
+    try {
+      data = await tryFetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`);
+    } catch(e) {}
+  }
+
+  if (data?.quoteResponse?.result) {
+    data.quoteResponse.result.forEach(q => {
+      if (q.regularMarketPrice != null) map[q.symbol] = q.regularMarketPrice;
+    });
+  }
+
+  // Fallback: fetch individual via chart API for any missing
+  const missing = symbols.filter(s => map[s] == null && !s.endsWith('.L'));
+  if (missing.length > 0) {
+    await Promise.allSettled(missing.map(async sym => {
+      const p = await fetchSinglePrice(sym);
+      if (p != null) map[sym] = p;
+    }));
+  }
+
+  return map;
+}
+
+async function fetchSinglePrice(symbol) {
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+  async function tryFetch(u) {
+    const r = await fetch(u, { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    return d.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+  }
+  try { return await tryFetch(url); } catch(e) {}
+  try { return await tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`); } catch(e) {}
+  return null;
+}
+
+// MoneyDJ XPath: /html/body/div[3]/div/div[4]/form/table[1]/tbody/tr[2]/td[2]
+const MONEYDJ_XPATH = '/html/body/div[3]/div/div[4]/form/table[1]/tbody/tr[2]/td[2]';
+
+async function fetchMoneyDJPrice(url) {
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  ];
+  for (const proxyUrl of proxies) {
+    try {
+      const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) continue;
+      const html = await r.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const result = document.evaluate(MONEYDJ_XPATH, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      const cell = result.singleNodeValue;
+      if (cell) {
+        const text = cell.textContent.trim().replace(/,/g, '');
+        const price = parseFloat(text);
+        if (!isNaN(price) && price > 0) return price;
+      }
+    } catch(e) {}
+  }
+  return null;
+}
+
+async function fetchExchangeRate() {
+  showToast('正在取得最新匯率...', 'info');
+  const rate = await fetchSinglePrice('USDTWD=X');
+  if (rate) {
+    document.getElementById('iRate').value = rate.toFixed(4);
+    showToast(`最新匯率: ${rate.toFixed(4)}`, 'success');
+  } else {
+    showToast('無法取得匯率，請手動輸入', 'warning');
+  }
+}
+
+// ============================================================
+// CRUD
+// ============================================================
+function openAddModal() {
+  state.editingId = null;
+  document.getElementById('modalTitle').innerHTML = '<i class="bi bi-plus-circle me-2"></i>新增持倉';
+  document.getElementById('iMarket').value = '台股';
+  document.getElementById('iSymbol').value = '';
+  document.getElementById('iYahoo').value = '';
+  document.getElementById('iName').value = '';
+  document.getElementById('iCurrency').value = 'TWD';
+  document.getElementById('iShares').value = '';
+  document.getElementById('iPrice').value = '';
+  document.getElementById('iMoneyDJ').value = '';
+  document.getElementById('iNote').value = '';
+  document.getElementById('iTarget').value = '';
+  document.getElementById('pricePreview').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('holdingModal')).show();
+}
+
+function openEditModal(id) {
+  const h = state.holdings.find(x => x.id === id);
+  if (!h) return;
+  state.editingId = id;
+  document.getElementById('modalTitle').innerHTML = '<i class="bi bi-pencil me-2"></i>編輯持倉';
+  document.getElementById('iMarket').value = h.market;
+  document.getElementById('iSymbol').value = h.symbol;
+  document.getElementById('iYahoo').value = h.yahoo || '';
+  document.getElementById('iMoneyDJ').value = h.moneydj || '';
+  document.getElementById('iName').value = h.name;
+  document.getElementById('iCurrency').value = h.currency;
+  document.getElementById('iShares').value = h.shares;
+  document.getElementById('iPrice').value = h.price;
+  document.getElementById('iNote').value = h.note || '';
+  document.getElementById('iTarget').value = h.target || '';
+
+  const vTWD = h.shares * h.price * (h.currency === 'USD' ? state.exchangeRate : 1);
+  document.getElementById('pricePreview').style.display = 'block';
+  document.getElementById('pricePreview').innerHTML =
+    `目前市值：<strong>${fmtTWD(vTWD)}</strong> (${h.currency === 'USD' ? 'USD ' + fmtNum(h.shares * h.price, 2) : ''})`;
+
+  new bootstrap.Modal(document.getElementById('holdingModal')).show();
+}
+
+function saveHolding() {
+  const market = document.getElementById('iMarket').value.trim();
+  const symbol = document.getElementById('iSymbol').value.trim();
+  const yahoo   = document.getElementById('iYahoo').value.trim() || null;
+  const moneydj = document.getElementById('iMoneyDJ').value.trim() || null;
+  const name    = document.getElementById('iName').value.trim();
+  const currency = document.getElementById('iCurrency').value;
+  const shares  = parseFloat(document.getElementById('iShares').value);
+  const price   = parseFloat(document.getElementById('iPrice').value);
+  const note    = document.getElementById('iNote').value.trim();
+  const target  = parseFloat(document.getElementById('iTarget').value) || null;
+
+  if (!market || !symbol || !name || isNaN(shares) || shares < 0 || isNaN(price) || price < 0) {
+    showToast('請填寫所有必填欄位（市場、代號、名稱、股數、現值）', 'danger'); return;
+  }
+
+  if (state.editingId != null) {
+    const h = state.holdings.find(x => x.id === state.editingId);
+    if (h) Object.assign(h, { market, symbol, yahoo, moneydj, name, currency, shares, price, note, target });
+  } else {
+    const maxOrder = Math.max(-1, ...state.holdings.filter(h => h.market === market).map(h => h.order ?? 0));
+    state.holdings.push({
+      id: state.nextId++, market, symbol, yahoo, moneydj, name, currency, shares, price,
+      priceDate: new Date().toLocaleDateString('zh-TW').replace(/\//g, '-'), note, target: target || null,
+      order: maxOrder + 1
+    });
+  }
+
+  bootstrap.Modal.getInstance(document.getElementById('holdingModal'))?.hide();
+  saveState();
+  renderAll();
+  showToast(state.editingId != null ? '持倉已更新' : '新增持倉成功', 'success');
+}
+
+function deleteHolding(id) {
+  const h = state.holdings.find(x => x.id === id);
+  if (!h) return;
+  if (!confirm(`確定要刪除「${h.name}」嗎？`)) return;
+  state.holdings = state.holdings.filter(x => x.id !== id);
+  saveState();
+  renderAll();
+  showToast('已刪除持倉', 'secondary');
+}
+
+// ============================================================
+// EXCHANGE RATE
+// ============================================================
+function showRateModal() {
+  document.getElementById('iRate').value = state.exchangeRate.toFixed(4);
+  document.getElementById('currentRateDisplay').textContent = state.exchangeRate.toFixed(4);
+  new bootstrap.Modal(document.getElementById('rateModal')).show();
+}
+
+function saveRate() {
+  const r = parseFloat(document.getElementById('iRate').value);
+  if (isNaN(r) || r <= 0) { showToast('匯率無效', 'danger'); return; }
+  state.exchangeRate = r;
+  saveState();
+  bootstrap.Modal.getInstance(document.getElementById('rateModal'))?.hide();
+  renderAll();
+  showToast(`匯率已設為 ${r.toFixed(4)}`, 'success');
+}
+
+// ============================================================
+// FILTER / TAB
+// ============================================================
+function filterMarket(market, btn) {
+  state.currentFilter = market;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderTable();
+}
+
+function showTab(tab) {
+  document.getElementById('tabPortfolio').style.display = tab === 'portfolio' ? '' : 'none';
+  document.getElementById('tabDashboard').style.display = tab === 'dashboard' ? '' : 'none';
+  document.getElementById('btnTabPortfolio').classList.toggle('active', tab === 'portfolio');
+  document.getElementById('btnTabDashboard').classList.toggle('active', tab === 'dashboard');
+  if (tab === 'dashboard') renderDashboard();
+}
+
+// ============================================================
+// IMPORT / EXPORT
+// ============================================================
+function exportJSON() {
+  const data = JSON.stringify({ holdings: state.holdings, exchangeRate: state.exchangeRate, nextId: state.nextId }, null, 2);
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+  a.download = `portfolio_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  showToast('已匯出 JSON 檔案', 'success');
+}
+
+function handleImport(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      if (!Array.isArray(d.holdings)) throw new Error('格式錯誤');
+      if (!confirm(`確定要匯入 ${d.holdings.length} 筆持倉資料？目前資料將被覆蓋。`)) return;
+      state.holdings = d.holdings;
+      state.exchangeRate = d.exchangeRate || 31.98;
+      state.nextId = d.nextId || (Math.max(...d.holdings.map(h => h.id)) + 1);
+      saveState(); renderAll();
+      showToast(`成功匯入 ${d.holdings.length} 筆持倉`, 'success');
+    } catch(err) {
+      showToast('匯入失敗：' + err.message, 'danger');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function mkChart(id, config) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  charts[id] = new Chart(canvas.getContext('2d'), config);
+}
+
+function fmtTWD(v) {
+  if (v >= 1e8) return 'NT$' + (v/1e8).toFixed(2) + '億';
+  if (v >= 1e4) return 'NT$' + Math.round(v).toLocaleString('zh-TW');
+  return 'NT$' + v.toFixed(0);
+}
+
+function fmtNum(v, dec = 2) {
+  return v.toLocaleString('zh-TW', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+let toastTimer;
+function showToast(msg, type = 'info') {
+  let t = document.getElementById('toastMsg');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toastMsg';
+    t.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;min-width:240px;font-size:13px;';
+    document.body.appendChild(t);
+  }
+  const colors = { success:'#43a047', danger:'#e53935', warning:'#fb8c00', info:'#1e88e5', secondary:'#546e7a' };
+  t.innerHTML = `<div style="background:${colors[type]||'#333'};color:white;padding:10px 16px;border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,0.2);">
+    <i class="bi bi-${type==='success'?'check-circle':type==='danger'?'x-circle':'info-circle'} me-2"></i>${msg}</div>`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.innerHTML = ''; }, 3500);
+}
+
+function renderAll() {
+  updateSummary();
+  renderTable();
+  // Re-render dashboard if visible
+  if (document.getElementById('tabDashboard').style.display !== 'none') renderDashboard();
+}
+
+// ============================================================
+// DRAG AND DROP ROW REORDERING
+// ============================================================
+function initDragDrop() {
+  const tbody = document.getElementById('tBody');
+  let dragSrcId = null;
+  let dragSrcMarket = null;
+  let dragOverTr = null;
+
+  tbody.addEventListener('dragstart', e => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) { e.preventDefault(); return; }
+    dragSrcId = parseInt(tr.dataset.id);
+    const h = state.holdings.find(x => x.id === dragSrcId);
+    dragSrcMarket = h?.market;
+    tr.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(dragSrcId));
+  });
+
+  tbody.addEventListener('dragover', e => {
+    e.preventDefault();
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr || tr === dragOverTr) return;
+    const targetId = parseInt(tr.dataset.id);
+    const targetH = state.holdings.find(x => x.id === targetId);
+    if (dragOverTr) dragOverTr.classList.remove('drag-over-top');
+    if (targetH?.market === dragSrcMarket && targetId !== dragSrcId) {
+      dragOverTr = tr;
+      tr.classList.add('drag-over-top');
+    } else {
+      dragOverTr = null;
+    }
+    e.dataTransfer.dropEffect = 'move';
+  });
+
+  tbody.addEventListener('dragleave', e => {
+    if (!tbody.contains(e.relatedTarget)) {
+      if (dragOverTr) { dragOverTr.classList.remove('drag-over-top'); dragOverTr = null; }
+    }
+  });
+
+  tbody.addEventListener('dragend', () => {
+    tbody.querySelectorAll('tr').forEach(r => r.classList.remove('dragging', 'drag-over-top'));
+    dragSrcId = null; dragSrcMarket = null; dragOverTr = null;
+  });
+
+  tbody.addEventListener('drop', e => {
+    e.preventDefault();
+    if (dragOverTr) { dragOverTr.classList.remove('drag-over-top'); }
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr || !dragSrcId) return;
+    const targetId = parseInt(tr.dataset.id);
+    if (targetId === dragSrcId) return;
+    const srcH = state.holdings.find(x => x.id === dragSrcId);
+    const tgtH = state.holdings.find(x => x.id === targetId);
+    if (!srcH || !tgtH || srcH.market !== tgtH.market) return;
+
+    // Reorder within market group
+    const mktHoldings = state.holdings
+      .filter(h => h.market === srcH.market)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const srcIdx = mktHoldings.findIndex(h => h.id === dragSrcId);
+    mktHoldings.splice(srcIdx, 1);
+    const newTgtIdx = mktHoldings.findIndex(h => h.id === targetId);
+    mktHoldings.splice(newTgtIdx, 0, srcH);
+    mktHoldings.forEach((h, i) => { h.order = i; });
+
+    dragSrcId = null; dragSrcMarket = null; dragOverTr = null;
+    saveState();
+    renderTable();
+  });
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+loadState();
+renderAll();
+initDragDrop();
+
+// Update shares/price preview in modal
+['iShares','iPrice','iCurrency'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', () => {
+    const shares = parseFloat(document.getElementById('iShares').value);
+    const price  = parseFloat(document.getElementById('iPrice').value);
+    const cur    = document.getElementById('iCurrency').value;
+    if (!isNaN(shares) && !isNaN(price) && shares > 0 && price > 0) {
+      const v = shares * price;
+      const vTWD = cur === 'USD' ? v * state.exchangeRate : v;
+      const el = document.getElementById('pricePreview');
+      el.style.display = 'block';
+      el.innerHTML = `預估市值：<strong>${fmtTWD(vTWD)}</strong>${cur==='USD'?' (USD '+fmtNum(v,2)+')':''}`;
+    }
+  });
+});
+</script>
+</body>
+</html>

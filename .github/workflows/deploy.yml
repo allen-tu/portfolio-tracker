@@ -1,0 +1,72 @@
+name: Deploy Portfolio Tracker
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ── 1. Validate ────────────────────────────────────────────────────────────
+  validate:
+    name: Validate HTML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check index.html exists
+        run: |
+          test -f index.html && echo "✅ index.html found" || (echo "❌ index.html missing" && exit 1)
+
+      - name: Basic HTML lint (check for unclosed tags)
+        run: |
+          python3 -c "
+          from html.parser import HTMLParser
+          class Validator(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.errors = []
+              def handle_error(self, message):
+                  self.errors.append(message)
+          v = Validator()
+          v.feed(open('index.html').read())
+          if v.errors:
+              print('HTML errors:', v.errors)
+              exit(1)
+          print('✅ HTML structure OK')
+          "
+
+  # ── 2. Deploy to GitHub Pages (main branch only) ───────────────────────────
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
