@@ -349,9 +349,10 @@
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">
-              <span class="status-dot dot-importxml me-1"></span>IMPORTXML 來源 <small class="text-muted">(選填，格式：網址::XPath，Yahoo 無法取得時使用)</small>
+              <span class="status-dot dot-importxml me-1"></span>IMPORTXML 來源 <small class="text-muted">(選填，Yahoo 無法取得時使用)</small>
             </label>
-            <input type="text" class="form-control form-control-sm" id="iMoneyDJ" placeholder="https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=xxxxx">
+            <input type="text" class="form-control form-control-sm" id="iMoneyDJ"
+              placeholder='"https://tw.stock.yahoo.com/quote/00948B.TWO","//*[@id=&#39;main-0-QuoteHeader-Proxy&#39;]/div/div[2]/div[1]/div/span[1]"'>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">備註</label>
@@ -796,10 +797,6 @@ async function refreshPrices() {
     const priceMap = await batchFetchPrices(symbols);
     state.holdings.forEach(h => {
       if (!h.yahoo) return;
-      if (h.yahoo.endsWith('.L')) {
-        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: null, status: 'skip' });
-        return;
-      }
       if (priceMap[h.yahoo] != null) {
         h.price = priceMap[h.yahoo];
         h.priceDate = today;
@@ -854,7 +851,7 @@ async function refreshPrices() {
 async function batchFetchPrices(symbols) {
   const map = {};
   // v7 批次 API 已失效，改用 v8 chart API 逐一抓取（並行）
-  const targets = symbols.filter(s => !s.endsWith('.L'));
+  const targets = symbols.slice();
   await Promise.allSettled(
     targets.map(async sym => {
       const p = await fetchSinglePrice(sym);
@@ -896,9 +893,10 @@ async function fetchSinglePrice(symbol) {
 const MONEYDJ_XPATH = '/html/body/div[3]/div/div[4]/form/table[1]/tbody/tr[2]/td[2]';
 
 async function fetchMoneyDJPrice(moneydjValue) {
-  // 解析 url::xpath 格式，容許 ["url"::"xpath"] 或直接 url::xpath 兩種寫法
-  const sepIdx = moneydjValue.indexOf('::');
-  if (sepIdx === -1) return null;
+  // 解析格式，支援：
+  //   "url","xpath"          ← IMPORTXML 風格（逗號分隔）
+  //   url::xpath             ← 雙冒號分隔
+  //   ["url"::"xpath"]       ← 帶括號的雙冒號
   const clean = s => {
     s = s.trim();
     if (s.startsWith('["') || s.startsWith("['")) s = s.slice(2);
@@ -907,8 +905,18 @@ async function fetchMoneyDJPrice(moneydjValue) {
     else if (s.endsWith('"') || s.endsWith("'")) s = s.slice(0, -1);
     return s.trim();
   };
-  const url   = clean(moneydjValue.substring(0, sepIdx));
-  const xpath = clean(moneydjValue.substring(sepIdx + 2));
+  let url, xpath;
+  const commaIdx = moneydjValue.indexOf('","');
+  const colonIdx = moneydjValue.indexOf('::');
+  if (commaIdx !== -1) {
+    url   = clean(moneydjValue.substring(0, commaIdx));
+    xpath = clean(moneydjValue.substring(commaIdx + 3));
+  } else if (colonIdx !== -1) {
+    url   = clean(moneydjValue.substring(0, colonIdx));
+    xpath = clean(moneydjValue.substring(colonIdx + 2));
+  } else {
+    return null;
+  }
   if (!url || !xpath) return null;
 
   const proxies = [
