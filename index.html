@@ -894,18 +894,26 @@ async function fetchSinglePrice(symbol) {
 // MoneyDJ XPath: /html/body/div[3]/div/div[4]/form/table[1]/tbody/tr[2]/td[2]
 const MONEYDJ_XPATH = '/html/body/div[3]/div/div[4]/form/table[1]/tbody/tr[2]/td[2]';
 
-async function fetchMoneyDJPrice(url) {
+async function fetchMoneyDJPrice(moneydjValue) {
+  // 解析 url::xpath 格式
+  const sepIdx = moneydjValue.indexOf('::');
+  if (sepIdx === -1) return null;
+  const url   = moneydjValue.substring(0, sepIdx).trim();
+  const xpath = moneydjValue.substring(sepIdx + 2).trim();
+  if (!url || !xpath) return null;
+
   const proxies = [
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
   ];
   for (const proxyUrl of proxies) {
     try {
       const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
       if (!r.ok) continue;
       const html = await r.text();
+      if (!html || html.length < 100) continue;
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const result = document.evaluate(MONEYDJ_XPATH, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      const result = document.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
       const cell = result.singleNodeValue;
       if (cell) {
         const text = cell.textContent.trim().replace(/,/g, '');
