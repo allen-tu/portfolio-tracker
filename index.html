@@ -90,6 +90,28 @@
     .drag-handle.drag-disabled { color: transparent; cursor: default; }
     tr.dragging { opacity: 0.35; }
     tr.drag-over-top td { border-top: 2px solid #1565c0 !important; }
+
+    /* Update Log Panel */
+    #updateLogPanel { display: none; margin-top: 20px; }
+    .update-log-card { background: white; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); overflow: hidden; }
+    .update-log-header { background: #263238; color: white; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+    .update-log-header h6 { margin: 0; font-size: 13px; font-weight: 600; }
+    .update-log-summary { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+    #updateLogTable { font-size: 12px; margin-bottom: 0; }
+    #updateLogTable thead th { background: #37474f; color: white; font-weight: 500; padding: 7px 10px; border: none; white-space: nowrap; }
+    #updateLogTable td { padding: 6px 10px; vertical-align: middle; border-color: #eceff1; }
+    #updateLogTable tbody tr:hover { background: #f5f5f5; }
+    .log-success td { }
+    .log-moneydj td { }
+    .log-skip td { color: #90a4ae; }
+    .log-fail td { color: #c62828; }
+    .log-badge-ok   { background: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .log-badge-mdj  { background: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .log-badge-skip { background: #eceff1; color: #607d8b; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .log-badge-fail { background: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .log-up   { color: #2e7d32; font-weight: 600; }
+    .log-down { color: #c62828; font-weight: 600; }
+    .log-flat { color: #607d8b; }
   </style>
 </head>
 <body>
@@ -194,6 +216,38 @@
 
   <!-- Market summary cards -->
   <div class="row g-3" id="marketCards"></div>
+
+  <!-- Update Log Panel -->
+  <div id="updateLogPanel">
+    <div class="update-log-card">
+      <div class="update-log-header" onclick="toggleUpdateLog()">
+        <div>
+          <h6><i class="bi bi-journal-text me-2"></i>更新日誌</h6>
+          <div class="update-log-summary" id="updateLogSummary"></div>
+        </div>
+        <i class="bi bi-chevron-up" id="updateLogChevron"></i>
+      </div>
+      <div id="updateLogBody">
+        <div class="table-responsive">
+          <table class="table table-sm" id="updateLogTable">
+            <thead>
+              <tr>
+                <th>市場</th>
+                <th>名稱</th>
+                <th>代號</th>
+                <th class="text-end">更新前</th>
+                <th class="text-end">更新後</th>
+                <th class="text-end">漲跌</th>
+                <th class="text-center">狀態</th>
+                <th>更新時間</th>
+              </tr>
+            </thead>
+            <tbody id="updateLogTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ======== DASHBOARD TAB ======== -->
@@ -722,18 +776,36 @@ async function refreshPrices() {
   btn.disabled = true;
   btn.innerHTML = '<i class="bi bi-arrow-clockwise price-spin me-1"></i>更新中...';
 
-  const today = new Date().toLocaleDateString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
+  const now = new Date();
+  const today = now.toLocaleDateString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
+  const timeStr = now.toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const fullTime = `${today} ${timeStr}`;
   let updated = 0;
+
+  // Snapshot old prices before update
+  const oldPrices = {};
+  state.holdings.forEach(h => { oldPrices[h.id] = h.price; });
+
+  // Log entries: { holding, oldPrice, newPrice, status:'ok'|'moneydj'|'skip'|'fail' }
+  const logEntries = [];
 
   // --- Yahoo Finance batch fetch ---
   const symbols = [...new Set(state.holdings.filter(h => h.yahoo).map(h => h.yahoo))];
   if (symbols.length) {
     const priceMap = await batchFetchPrices(symbols);
     state.holdings.forEach(h => {
-      if (h.yahoo && !h.yahoo.endsWith('.L') && priceMap[h.yahoo] != null) {
+      if (!h.yahoo) return;
+      if (h.yahoo.endsWith('.L')) {
+        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: null, status: 'skip' });
+        return;
+      }
+      if (priceMap[h.yahoo] != null) {
         h.price = priceMap[h.yahoo];
         h.priceDate = today;
         updated++;
+        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: h.price, status: 'ok' });
+      } else {
+        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: null, status: 'fail' });
       }
     });
   }
@@ -747,15 +819,21 @@ async function refreshPrices() {
     );
     mdResults.forEach(r => {
       if (r.status === 'fulfilled' && r.value.p != null) {
-        r.value.h.price = r.value.p;
-        r.value.h.priceDate = today;
+        const { h, p } = r.value;
+        h.price = p;
+        h.priceDate = today;
         updated++;
+        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: h.price, status: 'moneydj' });
+      } else {
+        const h = r.status === 'fulfilled' ? r.value.h : mdHoldings[mdResults.indexOf(r)];
+        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: null, status: 'fail' });
       }
     });
   }
 
   saveState();
   renderAll();
+  renderUpdateLog(logEntries, fullTime, updated);
 
   if (updated > 0) {
     showToast(`成功更新 ${updated} 筆報價`, 'success');
@@ -1031,6 +1109,70 @@ function fmtNum(v, dec = 2) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const MARKET_LABELS = { tw:'台股', us:'美股', global:'全球', bond:'債券', cash:'現金' };
+
+function renderUpdateLog(entries, fullTime, successCount) {
+  const panel = document.getElementById('updateLogPanel');
+  const summary = document.getElementById('updateLogSummary');
+  const tbody = document.getElementById('updateLogTbody');
+
+  const failCount = entries.filter(e => e.status === 'fail').length;
+  const skipCount = entries.filter(e => e.status === 'skip').length;
+
+  let summaryParts = [`${fullTime}　·　成功 ${successCount} 筆`];
+  if (skipCount) summaryParts.push(`略過 ${skipCount} 筆`);
+  if (failCount) summaryParts.push(`失敗 ${failCount} 筆`);
+  summary.textContent = summaryParts.join('　');
+
+  tbody.innerHTML = entries.map(e => {
+    const { h, oldPrice, newPrice, status } = e;
+    const market = MARKET_LABELS[h.market] || h.market;
+    const mktBadge = `<span class="badge-market badge-${h.market}">${market}</span>`;
+    const symbol = h.yahoo || '—';
+
+    let oldStr = oldPrice != null ? Number(oldPrice).toLocaleString('zh-TW', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+    let newStr = newPrice != null ? Number(newPrice).toLocaleString('zh-TW', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—';
+
+    let changeHtml = '—';
+    if (oldPrice != null && newPrice != null) {
+      const diff = newPrice - oldPrice;
+      const pct = oldPrice !== 0 ? (diff / oldPrice * 100) : 0;
+      const cls = diff > 0 ? 'log-up' : diff < 0 ? 'log-down' : 'log-flat';
+      const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '';
+      changeHtml = `<span class="${cls}">${arrow}${Math.abs(diff).toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)</span>`;
+    }
+
+    let badgeHtml, rowCls;
+    if (status === 'ok')       { badgeHtml = '<span class="log-badge-ok">✓ Yahoo</span>';    rowCls = 'log-success'; }
+    else if (status === 'moneydj') { badgeHtml = '<span class="log-badge-mdj">● MoneyDJ</span>'; rowCls = 'log-moneydj'; }
+    else if (status === 'skip')    { badgeHtml = '<span class="log-badge-skip">⏭ 略過</span>';   rowCls = 'log-skip'; }
+    else                           { badgeHtml = '<span class="log-badge-fail">✗ 失敗</span>';   rowCls = 'log-fail'; }
+
+    return `<tr class="${rowCls}">
+      <td>${mktBadge}</td>
+      <td>${h.name}</td>
+      <td style="font-family:monospace">${symbol}</td>
+      <td class="text-end">${oldStr}</td>
+      <td class="text-end">${newStr}</td>
+      <td class="text-end">${changeHtml}</td>
+      <td class="text-center">${badgeHtml}</td>
+      <td style="white-space:nowrap;color:#78909c">${status !== 'skip' && status !== 'fail' ? fullTime : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  panel.style.display = 'block';
+  document.getElementById('updateLogBody').style.display = 'block';
+  document.getElementById('updateLogChevron').className = 'bi bi-chevron-up';
+}
+
+function toggleUpdateLog() {
+  const body = document.getElementById('updateLogBody');
+  const chevron = document.getElementById('updateLogChevron');
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? 'block' : 'none';
+  chevron.className = collapsed ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
 }
 
 let toastTimer;
