@@ -77,7 +77,7 @@
 
     .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
     .dot-auto { background: #43a047; }
-    .dot-moneydj { background: #1e88e5; }
+    .dot-importxml { background: #1e88e5; }
     .dot-manual { background: #fb8c00; }
 
     @media (max-width: 768px) {
@@ -102,7 +102,7 @@
     #updateLogTable td { padding: 6px 10px; vertical-align: middle; border-color: #eceff1; }
     #updateLogTable tbody tr:hover { background: #f5f5f5; }
     .log-success td { }
-    .log-moneydj td { }
+    .log-importxml td { }
     .log-skip td { color: #90a4ae; }
     .log-fail td { color: #c62828; }
     .log-badge-ok   { background: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
@@ -349,7 +349,7 @@
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">
-              <span class="status-dot dot-moneydj me-1"></span>MoneyDJ 基金網址 <small class="text-muted">(選填，Yahoo 無法取得時使用)</small>
+              <span class="status-dot dot-importxml me-1"></span>IMPORTXML 來源 <small class="text-muted">(選填，格式：網址::XPath，Yahoo 無法取得時使用)</small>
             </label>
             <input type="text" class="form-control form-control-sm" id="iMoneyDJ" placeholder="https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=xxxxx">
           </div>
@@ -533,7 +533,7 @@ function renderTable() {
       const cls = { '台股':'row-tw','美股':'row-us','全球':'row-global','債券':'row-bond','現金':'row-cash' }[market] || '';
       const badge = { '台股':'badge-tw','美股':'badge-us','全球':'badge-global','債券':'badge-bond','現金':'badge-cash' }[market] || '';
       const srcDot = h.yahoo ? '<span class="status-dot dot-auto ms-1" title="Yahoo自動更新"></span>'
-                   : h.moneydj ? '<span class="status-dot dot-moneydj ms-1" title="MoneyDJ自動更新"></span>'
+                   : h.moneydj ? '<span class="status-dot dot-importxml ms-1" title="IMPORTXML自動更新"></span>'
                    : '<span class="status-dot dot-manual ms-1" title="手動更新"></span>';
 
       html += `<tr class="${cls}" data-id="${h.id}" draggable="true">
@@ -786,8 +786,9 @@ async function refreshPrices() {
   const oldPrices = {};
   state.holdings.forEach(h => { oldPrices[h.id] = h.price; });
 
-  // Log entries: { holding, oldPrice, newPrice, status:'ok'|'moneydj'|'skip'|'fail' }
+  // Log entries: { holding, oldPrice, newPrice, status:'ok'|'importxml'|'skip'|'fail' }
   const logEntries = [];
+  const yahooFailed = []; // holdings where Yahoo failed but have importxml fallback
 
   // --- Yahoo Finance batch fetch ---
   const symbols = [...new Set(state.holdings.filter(h => h.yahoo).map(h => h.yahoo))];
@@ -804,28 +805,33 @@ async function refreshPrices() {
         h.priceDate = today;
         updated++;
         logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: h.price, status: 'ok' });
+      } else if (h.moneydj) {
+        yahooFailed.push(h); // will retry via IMPORTXML
       } else {
         logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: null, status: 'fail' });
       }
     });
   }
 
-  // --- MoneyDJ fetch for funds not on Yahoo ---
-  const mdHoldings = state.holdings.filter(h => !h.yahoo && h.moneydj);
-  if (mdHoldings.length) {
-    btn.innerHTML = '<i class="bi bi-arrow-clockwise price-spin me-1"></i>抓取基金報價...';
-    const mdResults = await Promise.allSettled(
-      mdHoldings.map(h => fetchMoneyDJPrice(h.moneydj).then(p => ({ h, p })))
+  // --- IMPORTXML fetch: holdings with no yahoo, or Yahoo failed + has importxml ---
+  const xmlHoldings = [
+    ...state.holdings.filter(h => !h.yahoo && h.moneydj),
+    ...yahooFailed,
+  ];
+  if (xmlHoldings.length) {
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise price-spin me-1"></i>抓取 IMPORTXML 報價...';
+    const xmlResults = await Promise.allSettled(
+      xmlHoldings.map(h => fetchMoneyDJPrice(h.moneydj).then(p => ({ h, p })))
     );
-    mdResults.forEach(r => {
+    xmlResults.forEach(r => {
       if (r.status === 'fulfilled' && r.value.p != null) {
         const { h, p } = r.value;
         h.price = p;
         h.priceDate = today;
         updated++;
-        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: h.price, status: 'moneydj' });
+        logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: h.price, status: 'importxml' });
       } else {
-        const h = r.status === 'fulfilled' ? r.value.h : mdHoldings[mdResults.indexOf(r)];
+        const h = r.status === 'fulfilled' ? r.value.h : xmlHoldings[xmlResults.indexOf(r)];
         logEntries.push({ h, oldPrice: oldPrices[h.id], newPrice: null, status: 'fail' });
       }
     });
@@ -1158,7 +1164,7 @@ function renderUpdateLog(entries, fullTime, successCount) {
 
     let badgeHtml, rowCls;
     if (status === 'ok')       { badgeHtml = '<span class="log-badge-ok">✓ Yahoo</span>';    rowCls = 'log-success'; }
-    else if (status === 'moneydj') { badgeHtml = '<span class="log-badge-mdj">● MoneyDJ</span>'; rowCls = 'log-moneydj'; }
+    else if (status === 'importxml') { badgeHtml = '<span class="log-badge-mdj">● IMPORTXML</span>'; rowCls = 'log-importxml'; }
     else if (status === 'skip')    { badgeHtml = '<span class="log-badge-skip">⏭ 略過</span>';   rowCls = 'log-skip'; }
     else                           { badgeHtml = '<span class="log-badge-fail">✗ 失敗</span>';   rowCls = 'log-fail'; }
 
