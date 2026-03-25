@@ -890,16 +890,25 @@ async function fetchSinglePrice(symbol) {
 const MONEYDJ_XPATH = '/html/body/div[3]/div/div[4]/form/table[1]/tbody/tr[2]/td[2]';
 
 async function fetchMoneyDJPrice(moneydjValue) {
-  // 解析 url::xpath 格式
+  // 解析 url::xpath 格式，容許 ["url"::"xpath"] 或直接 url::xpath 兩種寫法
   const sepIdx = moneydjValue.indexOf('::');
   if (sepIdx === -1) return null;
-  const url   = moneydjValue.substring(0, sepIdx).trim();
-  const xpath = moneydjValue.substring(sepIdx + 2).trim();
+  const clean = s => {
+    s = s.trim();
+    if (s.startsWith('["') || s.startsWith("['")) s = s.slice(2);
+    else if (s.startsWith('[') || s.startsWith('"') || s.startsWith("'")) s = s.slice(1);
+    if (s.endsWith('"]') || s.endsWith("']")) s = s.slice(0, -2);
+    else if (s.endsWith('"') || s.endsWith("'")) s = s.slice(0, -1);
+    return s.trim();
+  };
+  const url   = clean(moneydjValue.substring(0, sepIdx));
+  const xpath = clean(moneydjValue.substring(sepIdx + 2));
   if (!url || !xpath) return null;
 
   const proxies = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `http://localhost:3000/proxy?url=${encodeURIComponent(url)}`,
     `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   ];
   for (const proxyUrl of proxies) {
     try {
