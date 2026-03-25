@@ -351,38 +351,9 @@
 // ============================================================
 // DEFAULT DATA (from spreadsheet)
 // ============================================================
-const DEFAULT_HOLDINGS = [
-  {id:1,  market:'台股', symbol:'0050',    yahoo:'0050.TW',    name:'元大台灣50',            shares:7542,    currency:'TWD', price:74.4,    priceDate:'2026-03-24', note:''},
-  {id:2,  market:'台股', symbol:'006208',  yahoo:'006208.TW',  name:'富邦台50',              shares:7095,    currency:'TWD', price:172.75,  priceDate:'2026-03-24', note:''},
-  {id:3,  market:'台股', symbol:'00675L',  yahoo:'00675L.TW',  name:'富邦加權正2',           shares:22000,   currency:'TWD', price:175.35,  priceDate:'2026-03-24', note:''},
-  {id:4,  market:'台股', symbol:'00713',   yahoo:'00713.TW',   name:'元大高息低波',          shares:33000,   currency:'TWD', price:51.35,   priceDate:'2026-03-24', note:''},
-  {id:5,  market:'台股', symbol:'00878',   yahoo:'00878.TW',   name:'國泰永續高股息',        shares:26000,   currency:'TWD', price:22.08,   priceDate:'2026-03-24', note:''},
-  {id:6,  market:'台股', symbol:'TSM',     yahoo:'TSM',        name:'TSM',                   shares:7,       currency:'USD', price:338.45,  priceDate:'2026-03-24', note:''},
-  {id:7,  market:'台股', symbol:'野村優質', yahoo:null,         name:'野村優質基金',          shares:4261.7,  currency:'TWD', price:303.16,  priceDate:'2026-03-24', note:'', moneydj:'https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=acic01'},
-  {id:8,  market:'美股', symbol:'VTI',     yahoo:'VTI',        name:'VTI',                   shares:33,      currency:'USD', price:324.19,  priceDate:'2026-03-24', note:''},
-  {id:9,  market:'美股', symbol:'BRK.B',   yahoo:'BRK-B',      name:'BRK.B',                 shares:4,       currency:'USD', price:479.98,  priceDate:'2026-03-24', note:''},
-  {id:10, market:'美股', symbol:'NVDA',    yahoo:'NVDA',       name:'NVDA',                  shares:4,       currency:'USD', price:175.68,  priceDate:'2026-03-24', note:''},
-  {id:11, market:'美股', symbol:'QLD',     yahoo:'QLD',        name:'QLD(FirstTrade)',       shares:104,     currency:'USD', price:63.58,   priceDate:'2026-03-24', note:''},
-  {id:12, market:'美股', symbol:'QLD',     yahoo:'QLD',        name:'QLD(IB)',               shares:316,     currency:'USD', price:63.58,   priceDate:'2026-03-24', note:''},
-  {id:13, market:'美股', symbol:'摩根科技', yahoo:null,         name:'摩根美國科技基金',      shares:436.36,  currency:'USD', price:62.40,   priceDate:'2026-03-24', note:'', moneydj:'https://www.moneydj.com/funddj/ya/yp010001.djhtm?a=jfzf3'},
-  {id:14, market:'美股', symbol:'00662',   yahoo:'00662.TW',   name:'富邦NASDAQ',            shares:12000,   currency:'TWD', price:98.60,   priceDate:'2026-03-24', note:''},
-  {id:15, market:'全球', symbol:'00893',   yahoo:'00893.TW',   name:'國泰智能電動車',        shares:50000,   currency:'TWD', price:32.89,   priceDate:'2026-03-24', note:''},
-  {id:16, market:'全球', symbol:'VT',      yahoo:'VT',         name:'VT(FirstTrade)',        shares:100,     currency:'USD', price:138.6,   priceDate:'2026-03-24', note:''},
-  {id:17, market:'全球', symbol:'VT',      yahoo:'VT',         name:'VT(元大台幣帳戶)-單筆', shares:453,     currency:'USD', price:138.6,   priceDate:'2026-03-24', note:''},
-  {id:18, market:'全球', symbol:'VT',      yahoo:'VT',         name:'VT(元大台幣帳戶)-定期', shares:51.91,   currency:'USD', price:138.6,   priceDate:'2026-03-24', note:''},
-  {id:19, market:'全球', symbol:'VXUS',    yahoo:'VXUS',       name:'VXUS',                  shares:40,      currency:'USD', price:76.58,   priceDate:'2026-03-24', note:''},
-  {id:20, market:'全球', symbol:'VWRA',    yahoo:'VWRA.L',     name:'VWRA(IB)',              shares:183,     currency:'USD', price:165.87,  priceDate:'2026-03-24', note:''},
-  {id:21, market:'全球', symbol:'野村全球', yahoo:null,         name:'野村全球品牌基金',      shares:16336.8, currency:'TWD', price:52.13,   priceDate:'2026-03-24', note:'', moneydj:'https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=acic09'},
-  {id:22, market:'全球', symbol:'中信貝萊德',yahoo:null,        name:'貝萊德世界科技基金',    shares:62.93,   currency:'USD', price:109.81,  priceDate:'2026-03-24', note:''},
-  {id:23, market:'全球', symbol:'國泰MIT',  yahoo:null,         name:'國泰人壽MIT多元收益',   shares:1451.15, currency:'USD', price:8.55,    priceDate:'2026-03-24', note:''},
-  {id:24, market:'債券', symbol:'00933B',   yahoo:'00933B.TW',  name:'國泰10Y+金融債',       shares:35000,   currency:'TWD', price:15.99,   priceDate:'2026-03-24', note:''},
-  {id:25, market:'債券', symbol:'00937B',   yahoo:'00937B.TW',  name:'群益ESG頻等債20+',     shares:40000,   currency:'TWD', price:14.77,   priceDate:'2026-03-24', note:''},
-  {id:26, market:'債券', symbol:'00948B',   yahoo:'00948B.TW',  name:'中信優息投資級債',     shares:60000,   currency:'TWD', price:9.43,    priceDate:'2026-03-24', note:''},
-  {id:27, market:'債券', symbol:'凱基聯博',  yahoo:null,         name:'聯博全球非銀等債TA',   shares:443.13,  currency:'TWD', price:7.44,    priceDate:'2026-03-24', note:''},
-  {id:28, market:'債券', symbol:'彭銀聯博',  yahoo:null,         name:'聯博全球非銀等債AT',   shares:878.16,  currency:'USD', price:3.06,    priceDate:'2026-03-24', note:''},
-  {id:29, market:'現金', symbol:'台幣',     yahoo:null,         name:'台幣現金',              shares:1,       currency:'TWD', price:1522000, priceDate:'2026-01-13', note:''},
-  {id:30, market:'現金', symbol:'美金',     yahoo:null,         name:'美金現金',              shares:1,       currency:'USD', price:2940,    priceDate:'2026-01-13', note:''},
-];
+// DEFAULT_HOLDINGS: 範例資料（首次使用時載入）
+// 注意：真實投資資料儲存於瀏覽器 localStorage，不會出現在此程式碼中
+const DEFAULT_HOLDINGS = [];
 
 // ============================================================
 // STATE
@@ -412,14 +383,18 @@ function loadState() {
     const saved = localStorage.getItem('portfolioState');
     if (saved) {
       const parsed = JSON.parse(saved);
-      state.holdings = parsed.holdings || DEFAULT_HOLDINGS;
+      state.holdings = parsed.holdings || [];
       state.exchangeRate = parsed.exchangeRate || 31.98;
-      state.nextId = parsed.nextId || (Math.max(...state.holdings.map(h => h.id)) + 1);
+      state.nextId = parsed.nextId || (state.holdings.length > 0
+        ? Math.max(...state.holdings.map(h => h.id)) + 1 : 1);
     } else {
-      state.holdings = JSON.parse(JSON.stringify(DEFAULT_HOLDINGS));
+      // 首次使用：空白啟動，資料由使用者自行新增或匯入
+      state.holdings = [];
+      state.nextId = 1;
     }
   } catch(e) {
-    state.holdings = JSON.parse(JSON.stringify(DEFAULT_HOLDINGS));
+    state.holdings = [];
+    state.nextId = 1;
   }
   // Migrate: assign order within each market group if missing
   const counters = {};
