@@ -1292,23 +1292,30 @@ function renderMomTable(monthly) {
 
 async function writeHistory(logEntries) {
   try {
-    // 組合每筆持股完整資料（含 shares，供 portfolio_snapshot 計算）
-    const holdingMap = {};
-    state.holdings.forEach(h => holdingMap[h.id] = h);
+    // 從 logEntries 建立「本次更新了哪些 id」的 map
+    const updatedMap = {};
+    logEntries.forEach(e => {
+      if (e.newPrice != null) {
+        updatedMap[e.h.id] = {
+          source: e.status === 'ok' ? 'yahoo' : e.status === 'importxml' ? 'importxml' : 'manual'
+        };
+      }
+    });
 
+    // 快照使用「所有持股的當前價格」，確保完整記錄
     const payload = {
       exchangeRate: state.exchangeRate,
-      holdings: logEntries
-        .filter(e => e.newPrice != null)
-        .map(e => ({
-          id:       e.h.id,
-          symbol:   e.h.yahoo || '',
-          name:     e.h.name,
-          market:   e.h.market,
-          currency: e.h.currency,
-          price:    e.newPrice,
-          shares:   holdingMap[e.h.id]?.shares ?? 0,
-          source:   e.status === 'ok' ? 'yahoo' : e.status === 'importxml' ? 'importxml' : 'manual',
+      holdings: state.holdings
+        .filter(h => h.price != null && Number(h.price) > 0)
+        .map(h => ({
+          id:       h.id,
+          symbol:   h.yahoo || '',
+          name:     h.name,
+          market:   h.market,
+          currency: h.currency,
+          price:    Number(h.price),
+          shares:   Number(h.shares) || 0,
+          source:   updatedMap[h.id]?.source ?? 'manual',
         }))
     };
     await fetch('http://localhost:3000/api/history', {
