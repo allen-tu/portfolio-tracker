@@ -112,6 +112,19 @@
     .log-up   { color: #2e7d32; font-weight: 600; }
     .log-down { color: #c62828; font-weight: 600; }
     .log-flat { color: #607d8b; }
+
+    /* History Tab */
+    .hist-card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); }
+    .hist-card h6 { font-size: 13px; font-weight: 600; color: #37474f; margin-bottom: 12px; }
+    .hist-section { margin-bottom: 20px; }
+    #histSymbolSelect { max-width: 260px; font-size: 12px; }
+    #momTable { font-size: 12px; }
+    #momTable thead th { background: #1a237e; color: white; font-weight: 500; padding: 7px 10px; border: none; }
+    #momTable td { padding: 6px 10px; border-color: #e8eaf6; }
+    .mom-up   { color: #2e7d32; font-weight: 600; }
+    .mom-down { color: #c62828; font-weight: 600; }
+    .hist-empty { text-align: center; padding: 40px; color: #90a4ae; font-size: 13px; }
+    .hist-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -128,6 +141,9 @@
       </button>
       <button class="btn btn-sm btn-outline-light nav-tab-btn" id="btnTabDashboard" onclick="showTab('dashboard')">
         <i class="bi bi-bar-chart-line me-1"></i>分析儀表板
+      </button>
+      <button class="btn btn-sm btn-outline-light nav-tab-btn" id="btnTabHistory" onclick="showTab('history')">
+        <i class="bi bi-clock-history me-1"></i>歷史分析
       </button>
       <button class="btn btn-sm btn-outline-warning ms-2 nav-tab-btn" onclick="showRateModal()">
         <i class="bi bi-currency-exchange me-1"></i>匯率設定
@@ -248,6 +264,69 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- ======== HISTORY TAB ======== -->
+<div id="tabHistory" class="container-fluid mt-3" style="display:none;">
+
+  <!-- Row 1: Portfolio Total Trend -->
+  <div class="hist-section">
+    <div class="hist-card">
+      <div class="hist-toolbar">
+        <h6 class="mb-0"><i class="bi bi-graph-up me-2 text-primary"></i>投資組合總值走勢</h6>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadHistoryTab()">
+          <i class="bi bi-arrow-clockwise me-1"></i>重新整理
+        </button>
+        <button class="btn btn-sm btn-outline-success" onclick="triggerBackup()">
+          <i class="bi bi-download me-1"></i>立即備份
+        </button>
+      </div>
+      <div id="histPortfolioEmpty" class="hist-empty" style="display:none;">
+        <i class="bi bi-database-x" style="font-size:32px;"></i><br>尚無歷史資料，請先按「更新報價」
+      </div>
+      <canvas id="chartPortfolioTrend" height="100"></canvas>
+    </div>
+  </div>
+
+  <!-- Row 2: Price Trend + MoM Table -->
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="hist-card" style="height:100%;">
+        <div class="hist-toolbar">
+          <h6 class="mb-0"><i class="bi bi-activity me-2 text-success"></i>個股價格走勢</h6>
+          <select id="histSymbolSelect" class="form-select form-select-sm ms-auto" onchange="renderPriceTrend()">
+            <option value="">— 選擇個股 —</option>
+          </select>
+        </div>
+        <div id="histPriceEmpty" class="hist-empty" style="display:none;">
+          請先選擇個股
+        </div>
+        <canvas id="chartPriceTrend" height="160"></canvas>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="hist-card" style="height:100%;">
+        <h6><i class="bi bi-calendar3 me-2 text-warning"></i>月度 MoM / 年度 YoY 比較</h6>
+        <div class="table-responsive" style="max-height:340px;overflow-y:auto;">
+          <table class="table table-sm" id="momTable">
+            <thead>
+              <tr>
+                <th>月份</th>
+                <th class="text-end">總資產 (NT$)</th>
+                <th class="text-end">MoM</th>
+                <th class="text-end">YoY</th>
+              </tr>
+            </thead>
+            <tbody id="momTbody">
+              <tr><td colspan="4" class="hist-empty">尚無資料</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ======== DASHBOARD TAB ======== -->
@@ -840,6 +919,8 @@ async function refreshPrices() {
 
   if (updated > 0) {
     showToast(`成功更新 ${updated} 筆報價`, 'success');
+    // 寫入 DuckDB 歷史紀錄（同一天只保留最後一次）
+    writeHistory(logEntries);
   } else {
     showToast('無法取得即時報價，請檢查網路連線', 'danger');
   }
@@ -1074,9 +1155,177 @@ function filterMarket(market, btn) {
 function showTab(tab) {
   document.getElementById('tabPortfolio').style.display = tab === 'portfolio' ? '' : 'none';
   document.getElementById('tabDashboard').style.display = tab === 'dashboard' ? '' : 'none';
+  document.getElementById('tabHistory').style.display   = tab === 'history'   ? '' : 'none';
   document.getElementById('btnTabPortfolio').classList.toggle('active', tab === 'portfolio');
   document.getElementById('btnTabDashboard').classList.toggle('active', tab === 'dashboard');
+  document.getElementById('btnTabHistory').classList.toggle('active',   tab === 'history');
   if (tab === 'dashboard') renderDashboard();
+  if (tab === 'history')   loadHistoryTab();
+}
+
+// ============================================================
+// HISTORY TAB
+// ============================================================
+let histChartPortfolio = null;
+let histChartPrice = null;
+let histSymbolData = {};   // symbol -> [{date, price}]
+let histPortfolioData = [];
+
+async function loadHistoryTab() {
+  try {
+    const [ptRes, symRes, momRes] = await Promise.all([
+      fetch('http://localhost:3000/api/portfolio-trend'),
+      fetch('http://localhost:3000/api/symbols'),
+      fetch('http://localhost:3000/api/monthly'),
+    ]);
+    histPortfolioData = await ptRes.json();
+    const symbols = await symRes.json();
+    const monthly  = await momRes.json();
+
+    renderPortfolioTrend(histPortfolioData);
+    populateSymbolSelect(symbols);
+    renderMomTable(monthly);
+  } catch(e) {
+    document.getElementById('histPortfolioEmpty').style.display = 'block';
+    document.getElementById('chartPortfolioTrend').style.display = 'none';
+  }
+}
+
+function renderPortfolioTrend(data) {
+  const canvas = document.getElementById('chartPortfolioTrend');
+  const empty  = document.getElementById('histPortfolioEmpty');
+  if (!data || !data.length) {
+    canvas.style.display = 'none'; empty.style.display = 'block'; return;
+  }
+  canvas.style.display = ''; empty.style.display = 'none';
+  if (histChartPortfolio) histChartPortfolio.destroy();
+  histChartPortfolio = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: data.map(d => d.date),
+      datasets: [{
+        label: '投資組合總值 (NT$)',
+        data: data.map(d => d.total_twd),
+        borderColor: '#1565c0', backgroundColor: 'rgba(21,101,192,0.08)',
+        tension: 0.3, pointRadius: 3, fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => 'NT$ ' + ctx.parsed.y.toLocaleString('zh-TW', {minimumFractionDigits:0}) }
+      }},
+      scales: {
+        x: { ticks: { font: { size: 11 } } },
+        y: { ticks: { font: { size: 11 }, callback: v => 'NT$' + (v/10000).toFixed(0) + '萬' } }
+      }
+    }
+  });
+}
+
+function populateSymbolSelect(symbols) {
+  const sel = document.getElementById('histSymbolSelect');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— 選擇個股 —</option>';
+  symbols.forEach(s => {
+    const label = s.symbol ? `${s.symbol} ${s.name}` : s.name;
+    sel.innerHTML += `<option value="${s.symbol}">${label}</option>`;
+  });
+  if (cur) sel.value = cur;
+}
+
+async function renderPriceTrend() {
+  const symbol = document.getElementById('histSymbolSelect').value;
+  const canvas = document.getElementById('chartPriceTrend');
+  const empty  = document.getElementById('histPriceEmpty');
+  if (!symbol) { canvas.style.display = 'none'; empty.style.display = 'block'; return; }
+  try {
+    const r = await fetch(`http://localhost:3000/api/trend?symbol=${encodeURIComponent(symbol)}`);
+    const data = await r.json();
+    if (!data.length) { canvas.style.display = 'none'; empty.style.display = 'block'; return; }
+    canvas.style.display = ''; empty.style.display = 'none';
+    if (histChartPrice) histChartPrice.destroy();
+    const currency = data[0]?.currency || '';
+    histChartPrice = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.date),
+        datasets: [{
+          label: data[0]?.name || symbol,
+          data: data.map(d => d.price),
+          borderColor: '#2e7d32', backgroundColor: 'rgba(46,125,50,0.08)',
+          tension: 0.3, pointRadius: 3, fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 11 } } },
+          y: { ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  } catch(e) { empty.style.display = 'block'; canvas.style.display = 'none'; }
+}
+
+function renderMomTable(monthly) {
+  const tbody = document.getElementById('momTbody');
+  if (!monthly || !monthly.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="hist-empty">尚無資料（需至少 1 筆更新記錄）</td></tr>';
+    return;
+  }
+  tbody.innerHTML = [...monthly].reverse().map(r => {
+    const twd   = Number(r.total_twd).toLocaleString('zh-TW', {maximumFractionDigits:0});
+    const mom   = r.mom_pct != null ? r.mom_pct : null;
+    const yoy   = r.yoy_pct != null ? r.yoy_pct : null;
+    const fmtPct = v => v == null ? '—'
+      : `<span class="${v>0?'mom-up':v<0?'mom-down':''}">${v>0?'▲':'▼'} ${Math.abs(v).toFixed(2)}%</span>`;
+    return `<tr>
+      <td>${r.month}</td>
+      <td class="text-end">NT$${twd}</td>
+      <td class="text-end">${fmtPct(mom)}</td>
+      <td class="text-end">${fmtPct(yoy)}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function writeHistory(logEntries) {
+  try {
+    // 組合每筆持股完整資料（含 shares，供 portfolio_snapshot 計算）
+    const holdingMap = {};
+    state.holdings.forEach(h => holdingMap[h.id] = h);
+
+    const payload = {
+      exchangeRate: state.exchangeRate,
+      holdings: logEntries
+        .filter(e => e.newPrice != null)
+        .map(e => ({
+          id:       e.h.id,
+          symbol:   e.h.yahoo || '',
+          name:     e.h.name,
+          market:   e.h.market,
+          currency: e.h.currency,
+          price:    e.newPrice,
+          shares:   holdingMap[e.h.id]?.shares ?? 0,
+          source:   e.status === 'ok' ? 'yahoo' : e.status === 'importxml' ? 'importxml' : 'manual',
+        }))
+    };
+    await fetch('http://localhost:3000/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch(e) { /* silent — history is best-effort */ }
+}
+
+async function triggerBackup() {
+  try {
+    const r = await fetch('http://localhost:3000/api/backup');
+    const d = await r.json();
+    if (d.ok) showToast(`備份完成 → ${d.files.map(f => f.split('/').pop()).join(', ')}`, 'success');
+    else showToast('備份失敗：' + d.error, 'danger');
+  } catch(e) { showToast('無法連線到本地 Server', 'danger'); }
 }
 
 // ============================================================
